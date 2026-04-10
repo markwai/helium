@@ -1,0 +1,175 @@
+Add Cmd+Opt+Down/Up shortcuts for sequential tab navigation.
+
+When Browser Layout is set to Vertical and the feature is enabled,
+Cmd+Opt+Down/Up navigates to the next/previous tab in strip order.
+When conditions are not met, the shortcuts fall through to the
+original IDC_FOCUS_NEXT_PANE / IDC_FOCUS_PREVIOUS_PANE behavior.
+
+The setting toggle only appears when Browser Layout = Vertical.
+Mac-only shortcuts; Windows/Linux bindings are a follow-up.
+
+--- a/chrome/app/chrome_command_ids.h
++++ b/chrome/app/chrome_command_ids.h
+@@ -94,4 +94,7 @@
+ #define IDC_WEB_APP_UPGRADE_DIALOG      34064
+ 
++#define IDC_SELECT_NEXT_TAB_SEQUENTIAL      34087
++#define IDC_SELECT_PREVIOUS_TAB_SEQUENTIAL  34088
++
+ // Helium commands
+ #define IDC_COPY_OR_INSPECT_SHORTCUT    34080
+--- a/chrome/browser/global_keyboard_shortcuts_mac.mm
++++ b/chrome/browser/global_keyboard_shortcuts_mac.mm
+@@ -148,4 +148,4 @@
+       {true,  false, false, true,  kVK_ANSI_C,            IDC_DEV_TOOLS_INSPECT},
+-      {true,  false, false, true,  kVK_DownArrow,         IDC_FOCUS_NEXT_PANE},
+-      {true,  false, false, true,  kVK_UpArrow,           IDC_FOCUS_PREVIOUS_PANE},
++      {true,  false, false, true,  kVK_DownArrow,         IDC_SELECT_NEXT_TAB_SEQUENTIAL},
++      {true,  false, false, true,  kVK_UpArrow,           IDC_SELECT_PREVIOUS_TAB_SEQUENTIAL},
+       {true,  true,  false, true,  kVK_ANSI_A,            IDC_FOCUS_INACTIVE_POPUP_FOR_ACCESSIBILITY},
+--- a/chrome/browser/ui/browser_command_controller.cc
++++ b/chrome/browser/ui/browser_command_controller.cc
+@@ -640,5 +640,31 @@
+     case IDC_MOVE_TAB_PREVIOUS:
+       MoveTabPrevious(browser_);
+       break;
++    case IDC_SELECT_NEXT_TAB_SEQUENTIAL:
++      if (profile()->GetPrefs()->GetBoolean(
++              prefs::kSequentialTabShortcuts) &&
++          profile()->GetPrefs()->GetInteger(prefs::kHeliumLayout) ==
++              2 /* HeliumLayoutType::kVertical */) {
++        browser_->tab_strip_model()->SelectNextTabSequential(
++            TabStripUserGestureDetails(
++                TabStripUserGestureDetails::GestureType::kOther));
++      } else {
++        return ExecuteCommandWithDisposition(IDC_FOCUS_NEXT_PANE,
++                                             disposition, time_stamp);
++      }
++      break;
++    case IDC_SELECT_PREVIOUS_TAB_SEQUENTIAL:
++      if (profile()->GetPrefs()->GetBoolean(
++              prefs::kSequentialTabShortcuts) &&
++          profile()->GetPrefs()->GetInteger(prefs::kHeliumLayout) ==
++              2 /* HeliumLayoutType::kVertical */) {
++        browser_->tab_strip_model()->SelectPreviousTabSequential(
++            TabStripUserGestureDetails(
++                TabStripUserGestureDetails::GestureType::kOther));
++      } else {
++        return ExecuteCommandWithDisposition(IDC_FOCUS_PREVIOUS_PANE,
++                                             disposition, time_stamp);
++      }
++      break;
+     case IDC_SELECT_TAB_0:
+     case IDC_SELECT_TAB_1:
+@@ -1699,3 +1725,5 @@
+   command_updater_.UpdateCommandEnabled(IDC_MOVE_TAB_NEXT, supports_tabs);
+   command_updater_.UpdateCommandEnabled(IDC_MOVE_TAB_PREVIOUS, supports_tabs);
++  command_updater_.UpdateCommandEnabled(IDC_SELECT_NEXT_TAB_SEQUENTIAL, supports_tabs);
++  command_updater_.UpdateCommandEnabled(IDC_SELECT_PREVIOUS_TAB_SEQUENTIAL, supports_tabs);
+   command_updater_.UpdateCommandEnabled(IDC_SELECT_TAB_0, supports_tabs);
+--- a/chrome/browser/ui/views/frame/browser_native_widget_mac.mm
++++ b/chrome/browser/ui/views/frame/browser_native_widget_mac.mm
+@@ -268,4 +268,6 @@
+     case IDC_SELECT_NEXT_TAB:
+     case IDC_SELECT_PREVIOUS_TAB:
++    case IDC_SELECT_NEXT_TAB_SEQUENTIAL:
++    case IDC_SELECT_PREVIOUS_TAB_SEQUENTIAL:
+     case IDC_SHOW_BOOKMARK_MANAGER:
+     case IDC_SHOW_DOWNLOADS:
+--- a/chrome/browser/ui/tabs/tab_strip_model.h
++++ b/chrome/browser/ui/tabs/tab_strip_model.h
+@@ -617,6 +617,9 @@
+   // Used in BrowserView::StopTabCycling().
+   void StopMRUCycling();
+ 
++  void SelectNextTabSequential(TabStripUserGestureDetails detail);
++  void SelectPreviousTabSequential(TabStripUserGestureDetails detail);
++
+   // Moves the active in the specified direction. Respects group boundaries.
+   void MoveTabNext();
+   void MoveTabPrevious();
+--- a/chrome/browser/ui/tabs/tab_strip_model.cc
++++ b/chrome/browser/ui/tabs/tab_strip_model.cc
+@@ -4053,5 +4053,15 @@ void TabStripModel::StopMRUCycling() {
+   mru_cycle_list_.clear();
+ }
+ 
++void TabStripModel::SelectNextTabSequential(
++    TabStripUserGestureDetails detail) {
++  SelectRelativeTab(TabRelativeDirection::kNext, detail);
++}
++
++void TabStripModel::SelectPreviousTabSequential(
++    TabStripUserGestureDetails detail) {
++  SelectRelativeTab(TabRelativeDirection::kPrevious, detail);
++}
++
+ void TabStripModel::SelectRelativeTab(TabRelativeDirection direction,
+                                       TabStripUserGestureDetails detail) {
+--- a/chrome/common/pref_names.h
++++ b/chrome/common/pref_names.h
+@@ -1315,3 +1315,5 @@
+ inline constexpr char kTabCyclingMRU[] = "helium.browser.mru_tab_cycling";
+ 
++inline constexpr char kSequentialTabShortcuts[] = "helium.browser.sequential_tab_shortcuts";
++
+ // An enum (HeliumLayoutType) pref that controls the browser layout.
+--- a/chrome/browser/ui/browser_ui_prefs.cc
++++ b/chrome/browser/ui/browser_ui_prefs.cc
+@@ -119,3 +119,5 @@
+   registry->RegisterBooleanPref(prefs::kTabCyclingMRU, false);
+ 
++  registry->RegisterBooleanPref(prefs::kSequentialTabShortcuts, true);
++
+   registry->RegisterBooleanPref(prefs::kHeliumCenteredLocationBar, false);
+--- a/chrome/browser/extensions/api/settings_private/prefs_util.cc
++++ b/chrome/browser/extensions/api/settings_private/prefs_util.cc
+@@ -259,3 +259,5 @@
+   (*s_allowlist)[::prefs::kTabCyclingMRU] =
+       settings_api::PrefType::kBoolean;
++  (*s_allowlist)[::prefs::kSequentialTabShortcuts] =
++      settings_api::PrefType::kBoolean;
+ 
+--- a/chrome/app/settings_strings.grdp
++++ b/chrome/app/settings_strings.grdp
+@@ -312,3 +312,6 @@
+   <message name="IDS_SETTINGS_MINIMAL_LOCATION_BAR" desc="Label for the toggle that enables the minimal address bar.">
+     Minimal address bar
+   </message>
++  <message name="IDS_SETTINGS_SEQUENTIAL_TAB_SHORTCUTS" desc="Label for the toggle which enables or disables Cmd+Opt+Down/Up shortcuts for switching to the next or previous tab in order.">
++    Use Cmd+Opt+Down/Up to switch to next/previous tab
++  </message>
+   <message name="IDS_SETTINGS_BROWSER_ZEN_MODE" desc="Label for the toggle that enables zen mode, hiding browser chrome until hover.">
+--- a/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc
++++ b/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc
+@@ -517,2 +517,3 @@
+       {"minimalLocationBar", IDS_SETTINGS_MINIMAL_LOCATION_BAR},
++      {"sequentialTabShortcuts", IDS_SETTINGS_SEQUENTIAL_TAB_SHORTCUTS},
+       {"showHomeButton", IDS_SETTINGS_SHOW_HOME_BUTTON},
+--- a/chrome/browser/resources/settings/appearance_page/appearance_page.ts
++++ b/chrome/browser/resources/settings/appearance_page/appearance_page.ts
+@@ -482,4 +482,8 @@
+   private showCenteredLocationBarSetting_(layout: number|undefined): boolean {
+     return layout !== BrowserLayout.COMPACT;
+   }
+ 
++  private showSequentialTabShortcutsSetting_(layout: number|undefined): boolean {
++    return this.showVerticalTabsEnabled_ && layout === BrowserLayout.VERTICAL;
++  }
++
+   private themeChanged_(themeId: string) {
+--- a/chrome/browser/resources/settings/appearance_page/appearance_page.html
++++ b/chrome/browser/resources/settings/appearance_page/appearance_page.html
+@@ -124,3 +124,9 @@
+               pref="{{prefs.helium.browser.minimal_location_bar}}"
+               label="$i18n{minimalLocationBar}">
+           </settings-toggle-button>
++          <settings-toggle-button
++              hidden="[[!showSequentialTabShortcutsSetting_(
++                  prefs.helium.browser.layout.value)]]"
++              pref="{{prefs.helium.browser.sequential_tab_shortcuts}}"
++              label="$i18n{sequentialTabShortcuts}">
++          </settings-toggle-button>
+           <settings-toggle-button
+               hidden="[[!showZenModeEnabled_]]"
+               pref="{{prefs.helium.browser.zen_mode}}"
