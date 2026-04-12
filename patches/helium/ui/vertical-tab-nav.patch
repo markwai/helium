@@ -132,7 +132,7 @@ Mac-only shortcuts; Windows/Linux bindings are a follow-up.
  
 --- a/chrome/app/settings_strings.grdp
 +++ b/chrome/app/settings_strings.grdp
-@@ -312,3 +312,6 @@
+@@ -312,4 +312,7 @@
    <message name="IDS_SETTINGS_MINIMAL_LOCATION_BAR" desc="Label for the toggle that enables the minimal address bar.">
      Minimal address bar
    </message>
@@ -148,7 +148,7 @@ Mac-only shortcuts; Windows/Linux bindings are a follow-up.
        {"showHomeButton", IDS_SETTINGS_SHOW_HOME_BUTTON},
 --- a/chrome/browser/resources/settings/appearance_page/appearance_page.ts
 +++ b/chrome/browser/resources/settings/appearance_page/appearance_page.ts
-@@ -482,4 +482,8 @@
+@@ -482,5 +482,9 @@
    private showCenteredLocationBarSetting_(layout: number|undefined): boolean {
      return layout !== BrowserLayout.COMPACT;
    }
@@ -160,7 +160,7 @@ Mac-only shortcuts; Windows/Linux bindings are a follow-up.
    private themeChanged_(themeId: string) {
 --- a/chrome/browser/resources/settings/appearance_page/appearance_page.html
 +++ b/chrome/browser/resources/settings/appearance_page/appearance_page.html
-@@ -124,3 +124,9 @@
+@@ -124,6 +124,12 @@
                pref="{{prefs.helium.browser.minimal_location_bar}}"
                label="$i18n{minimalLocationBar}">
            </settings-toggle-button>
